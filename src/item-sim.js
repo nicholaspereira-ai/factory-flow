@@ -1,0 +1,45 @@
+/* Discrete solid inventory on schematic geometry. Fluids use continuous buffers.
+   Not a tile-accurate Factorio emulator: group buffers and swing timing are estimates. */
+function createItemSimulation(graph,recipes,engine,fluidItems){
+ const nodes=graph.nodes,edges=graph.edges,byId=id=>nodes.find(n=>n.id===id),isFluid=i=>fluidItems.has(i),gap=10;
+ const lanes={},stores={},machines={},sources={},arms={},bridges={},events=[],ledger={supplied:{},consumed:{},produced:{},exported:{}};
+ let time=0,uid=0;const splitTurns={};const add=(o,k,q)=>o[k]=(o[k]||0)+q;
+ const lane=(e,d)=>e[d+'Lane']??e.lane??0, tap=(e,d)=>e[d+'At']??e.at??0;
+ const capacity=n=>({yellow:450,red:900,blue:1350}[n.tier]||450);
+ const points=n=>{const ps=[n.points[0]],taps=[0];let length=0;for(let i=1;i<n.points.length;i++){const a=n.points[i-1],b=n.points[i];if(a.x!==b.x&&a.y!==b.y)ps.push({x:b.x,y:a.y});ps.push(b);length+=Math.abs(b.x-a.x)+Math.abs(b.y-a.y);taps.push(length)}return {points:ps,taps,length:Math.max(10,length)}};
+ for(const n of nodes){stores[n.id]={};if(n.kind==='belt'){const p=points(n);lanes[n.id]=[0,1].map(l=>({...p,item:n.lanes[l],items:[],crossings:[],speed:capacity(n)/60*gap}));}if(n.kind==='machine')machines[n.id]={timers:Array(n.count).fill(0),out:0,outputs:{},made:0,madeOutputs:{},status:'Waiting for ingredients'};if(n.kind==='source')sources[n.id]=0;}
+ for(const n of nodes.filter(n=>n.kind==='belt'&&n.full))for(const line of lanes[n.id])if(line.item)for(let x=0;x<=line.length;x+=gap){line.items.push({id:++uid,x,item:line.item});add(ledger.supplied,line.item,1);}
+ for(let i=0;i<edges.length;i++){const e=edges[i];if(e.kind==='route')bridges[i]={items:[],credit:0};else if(!isFluid(e.item)){const t=e.transport||{},kind=INSERTER_TYPES[t.type]||INSERTER_TYPES.fast,count=t.count||Math.max(1,Math.ceil((e.limit||120)/(3600/kind.ticks*.75)));arms[i]=Array.from({length:count},()=>({phase:'ready',elapsed:0,held:0,hand:t.hand||kind.hand,half:kind.ticks/120,credit:0}));}}
+ function available(n,item,e){if(n.kind==='belt'){const line=lanes[n.id][lane(e,'from')],x=line.taps[tap(e,'from')]??line.length;return line.items.filter(p=>Math.abs(p.x-x)<=gap).length;}if(n.kind==='machine')return machines[n.id].outputs[item]||0;return stores[n.id][item]||0;}
+ function space(n,item,e){if(n.kind==='belt'){const line=lanes[n.id][lane(e,'to')],x=line.taps[tap(e,'to')]??0;return line.item===item&&!line.items.some(p=>Math.abs(p.x-x)<gap-.001)?1:0;}if(n.kind==='machine'){const q=engine.inputs(n)[item];return q?Math.max(0,q*n.count*2-(stores[n.id][item]||0)):0;}return Math.max(0,8-(stores[n.id][item]||0));}
+ function take(n,item,e,q){if(n.kind==='belt'){const line=lanes[n.id][lane(e,'from')],x=line.taps[tap(e,'from')]??line.length;for(let j=line.items.length-1;j>=0&&q>0;j--)if(Math.abs(line.items[j].x-x)<=gap){line.items.splice(j,1);q--;}}else if(n.kind==='machine'){machines[n.id].outputs[item]-=q;machines[n.id].out=machines[n.id].outputs[engine.product(n)]||0;}else stores[n.id][item]-=q;}
+ function put(n,item,e,q){if(n.kind==='belt'){const line=lanes[n.id][lane(e,'to')];line.items.push({id:++uid,x:line.taps[tap(e,'to')]??0,item});}else add(stores[n.id],item,q);}
+ function routeTurn(a,e){if(a.kind!=='splitter')return true;const desired=a.policy==='a'?0:a.policy==='b'?1:(splitTurns[a.id+'|'+e.item]||0);if((e.branch||0)===desired)return true;return !edges.some((other,j)=>other.from===a.id&&other.item===e.item&&(other.branch||0)===desired&&bridges[j]?.items.length<8);}
+ function record(i,q){events.push({t:time,i,q});}
+ function step(dt){time+=dt;
+  for(const n of nodes){if(n.kind==='source'){const item=n.item;const room=Math.max(0,(n.supply||0)/60*2+2-(stores[n.id][item]||0)),q=Math.min(room,(n.supply||0)/60*dt);add(stores[n.id],item,q);add(ledger.supplied,item,q);}
+   if(n.kind==='belt')for(let l=0;l<2;l++){const line=lanes[n.id][l];line.items.sort((a,b)=>b.x-a.x);let front=n.exportEnd===true&&!n.endBlocked?Infinity:line.length;for(const p of line.items){const old=p.x;p.x=Math.min(front,p.x+line.speed*dt);for(let k=0;k<line.taps.length-1;k++){const mid=(line.taps[k]+line.taps[k+1])/2;if(old<mid&&p.x>=mid)line.crossings.push({t:time,k});}front=p.x-gap;}
+    while(line.crossings.length&&line.crossings[0].t<time-30)line.crossings.shift();
+    if(n.exportEnd===true&&!n.endBlocked){for(let j=line.items.length-1;j>=0;j--)if(line.items[j].x>=line.length-.0001){add(ledger.exported,line.item,1);line.items.splice(j,1);}}
+    if(n.full&&line.item&&!line.items.some(p=>p.x<gap-.001)){const nearest=line.items.length?Math.min(...line.items.map(p=>p.x)):gap;line.items.push({id:++uid,x:Math.max(0,nearest-gap),item:line.item});add(ledger.supplied,line.item,1);}
+   }
+  }
+  // Route joins preserve each item; transit is visible between their endpoints.
+  for(const [key,bridge] of Object.entries(bridges)){const i=+key,e=edges[i],a=byId(e.from),b=byId(e.to);bridge.credit=Math.min(1,bridge.credit+Math.min(e.limit??100000,capacity(a),capacity(b))/60*dt);for(const p of bridge.items)p.progress=Math.min(1,p.progress+dt);if(bridge.items[0]?.progress>=1&&space(b,e.item,e)>=1){put(b,e.item,e,1);bridge.items.shift();record(i,1);}if(bridge.credit>=1&&bridge.items.length<8&&available(a,e.item,e)>=1&&routeTurn(a,e)){take(a,e.item,e,1);bridge.items.push({id:++uid,item:e.item,progress:0});bridge.credit--;if(a.kind==='splitter')splitTurns[a.id+'|'+e.item]=1-(e.branch||0);}}
+  for(let i=0;i<edges.length;i++){const e=edges[i];if(e.kind==='route')continue;const a=byId(e.from),b=byId(e.to);
+   if(isFluid(e.item)){const q=Math.min(available(a,e.item,e),space(b,e.item,e),(e.limit??100000)/60*dt);if(q>0){take(a,e.item,e,q);put(b,e.item,e,q);record(i,q);}continue;}
+   const team=arms[i],per=(e.limit??120)/60/team.length;
+   for(const arm of team){arm.credit=Math.min(arm.hand,arm.credit+per*dt);if(arm.phase==='ready'){const q=Math.floor(Math.min(arm.hand,arm.credit,available(a,e.item,e),b.kind==='belt'?arm.hand:space(b,e.item,e)));if(q>0){take(a,e.item,e,q);arm.held=q;arm.credit-=q;arm.phase='out';arm.elapsed=0;}}
+    else if(arm.phase==='out'){arm.elapsed=Math.min(arm.half,arm.elapsed+dt);if(arm.elapsed>=arm.half){const q=Math.min(arm.held,Math.floor(space(b,e.item,e)));if(q>0){put(b,e.item,e,q);arm.held-=q;record(i,q);}if(!arm.held){arm.phase='back';arm.elapsed=0;}}}
+    else {arm.elapsed+=dt;if(arm.elapsed>=arm.half){arm.phase='ready';arm.elapsed=0;}}
+   }
+  }
+  for(const n of nodes.filter(n=>n.kind==='machine')){const m=machines[n.id],r=recipes[n.recipe],ins=engine.inputs(n),duration=60*r.out/engine.per(n);let working=0,blocked=0;for(let u=0;u<m.timers.length;u++){if(m.timers[u]>0){m.timers[u]=Math.max(0,m.timers[u]-dt);working++;if(m.timers[u]===0){for(const [item,q]of Object.entries(engine.outputs(n))){add(m.outputs,item,q);add(m.madeOutputs,item,q);add(ledger.produced,item,q)}m.out=m.outputs[r.product]||0;m.made+=r.out;}}
+    if(m.timers[u]===0){if(Object.entries(engine.outputs(n)).some(([item,q])=>(m.outputs[item]||0)>=q*n.count*2)){blocked++;continue;}if(Object.entries(ins).every(([item,q])=>(stores[n.id][item]||0)+1e-8>=q)){for(const [item,q]of Object.entries(ins)){stores[n.id][item]-=q;add(ledger.consumed,item,q);}m.timers[u]=duration;}}
+   }for(const [item,rate]of Object.entries(n.outputSinks||{})){const q=Math.min(m.outputs[item]||0,rate/60*dt);if(q>0){m.outputs[item]-=q;add(ledger.exported,item,q)}}m.out=m.outputs[r.product]||0;m.status=blocked?'Output buffer full':working||m.timers.some(t=>t>0)?'Crafting':'Waiting for ingredients';
+  }
+  while(events.length&&events[0].t<time-30)events.shift();
+ }
+ function audit(){const held={};for(const [id,pair]of Object.entries(lanes))for(const line of pair)for(const p of line.items)add(held,p.item,1);for(const store of Object.values(stores))for(const [item,q]of Object.entries(store))add(held,item,q);for(const m of Object.values(machines))for(const [item,q]of Object.entries(m.outputs))add(held,item,q);for(const [i,team]of Object.entries(arms))for(const arm of team)add(held,edges[i].item,arm.held);for(const bridge of Object.values(bridges))for(const p of bridge.items)add(held,p.item,1);const items=new Set([...Object.keys(ledger.supplied),...Object.keys(ledger.produced)]);return [...items].every(item=>Math.abs((ledger.supplied[item]||0)+(ledger.produced[item]||0)-(ledger.consumed[item]||0)-(ledger.exported[item]||0)-(held[item]||0))<1e-5);}
+ return {step,lanes,machines,stores,arms,bridges,ledger,audit,get time(){return time},rates:()=>edges.map((e,i)=>events.filter(v=>v.i===i).reduce((s,v)=>s+v.q,0)*60/Math.max(1,Math.min(30,time)))};
+}
