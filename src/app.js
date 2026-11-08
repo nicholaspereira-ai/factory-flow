@@ -62,9 +62,9 @@ function zoom(f){const b=$('viewport').getBoundingClientRect(),z=Math.max(.15,Ma
 const snap=v=>Math.round(v/40)*40,point=ev=>{let b=$('viewport').getBoundingClientRect();return {x:Math.max(40,Math.min(6000,snap((ev.clientX-b.left-view.x)/view.z))),y:Math.max(80,Math.min(6000,snap((ev.clientY-b.top-view.y)/view.z)))}};
 function orth(a,b){return [{...a},...(a.x!==b.x&&a.y!==b.y?[{x:b.x,y:a.y}]:[]),{...b}]}
 const path=pts=>pts.map((p,i)=>(i?'L':'M')+p.x+','+p.y).join(' ');
-function offsetPoints(points,off){const pts=points.filter((p,i)=>!i||p.x!==points[i-1].x||p.y!==points[i-1].y);return pts.map((p,i)=>{const a=pts[Math.max(0,i-1)],b=pts[Math.min(pts.length-1,i+1)],normal=(u,v)=>{const dx=v.x-u.x,dy=v.y-u.y,len=Math.hypot(dx,dy)||1;return {x:-dy/len,y:dx/len}},before=normal(a,p),after=normal(p,b);if(!i)return {x:p.x+after.x*off,y:p.y+after.y*off};if(i===pts.length-1)return {x:p.x+before.x*off,y:p.y+before.y*off};const dot=before.x*after.x+before.y*after.y,k=1+dot;if(k<.01)return {x:p.x+after.x*off,y:p.y+after.y*off};return {x:p.x+(before.x+after.x)*off/k,y:p.y+(before.y+after.y)*off/k}})}
+function offsetPoints(pts,off){return beltOffsetPoints(pts,off)}
 function offsetPath(pts,off){return path(offsetPoints(pts,off))}
-function routePoints(e){const a=get(e.from),b=get(e.to),p=port(a,e.item,true,0,at(e,'from'),e.branch),q=port(b,e.item,false,0,at(e,'to'));p.y+=a.kind==='belt'?15:10;q.y+=b.kind==='belt'?15:10;const midX=(p.x+q.x)/2;return [p,{x:midX,y:p.y},{x:midX,y:q.y},q]}
+function routePoints(e){return beltRoutePoints(state,e)}
 function port(n,item,out,ln=0,tap=0,branch=0,slot=null){if(canvasAssembler(n)&&slot!==null&&slot<12)return visibleSlotPoint(n,slot);if(n.kind==='belt'){let p=n.points[tap];return {x:p.x,y:p.y+(ln?15:-15)}}if(n.kind==='splitter')return {x:n.x+(out?70:-70),y:n.y+(out?(branch?30:-30):0)+(ln?10:-10)};return {x:n.x+(out?250:0),y:n.y+(out?81+Math.max(0,Object.keys(E.outputs(n)).indexOf(item))*40:80+Object.keys(E.inputs(n)).indexOf(item)*40)}}
 const curve=(a,b)=>`M${a.x},${a.y} C${a.x+60},${a.y} ${b.x-60},${b.y} ${b.x},${b.y}`;
 function streamTiming(rate,capacity,len){if(rate<=0||len<=0)return null;const speed=capacity/60*10,interval=60/rate,travel=len/speed,count=Math.max(1,Math.ceil(travel/interval-1e-10)),period=count*interval;return {speed,interval,travel,count,period,active:Math.min(1,travel/period)}}

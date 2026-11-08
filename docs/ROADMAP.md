@@ -49,3 +49,5 @@ Reduced primary actions to Goal, Budget and More; moved examples, checks, displa
 Belt rendering now draws one continuous rail/track/lane surface per belt route instead of overlapping rounded capsules at every editable point. Per-section solver flow overlays and edit handles remain intact. Automated checks pass; visual verification is pending.
 
 Supply selection in the production-goal panel now offers one-click full belts for common materials, visible speed buttons, duplication, and copying lane A to both lanes. New belts inherit the last chosen speed within the dialog. Mixed lanes retain individual material selectors. The downstream layout-planner supply editor still uses its existing controls.
+
+Route-connection live items now use lane geometry and distance-based tier speed rather than fixed one-second transit. Queues preserve item spacing and back up into suppliers. Splitter internal inventory and branch alternation are lane-specific, including when both lanes carry the same item. Regression checks cover all belt tiers, different connection lengths, blocked queues, conservation and lane isolation. Schematic distances remain non-tile-accurate.

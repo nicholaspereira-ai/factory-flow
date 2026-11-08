@@ -16,3 +16,6 @@ function createEngine(recipes){
  return {byProduct,machines,product,outputs,inputs,speed,per,options,connectionError,analyze};
 }
 if(typeof module!=='undefined')module.exports=createEngine;
+
+function beltOffsetPoints(points,off){const pts=points.filter((p,i)=>!i||p.x!==points[i-1].x||p.y!==points[i-1].y);return pts.map((p,i)=>{const a=pts[Math.max(0,i-1)],b=pts[Math.min(pts.length-1,i+1)],normal=(u,v)=>{const dx=v.x-u.x,dy=v.y-u.y,len=Math.hypot(dx,dy)||1;return {x:-dy/len,y:dx/len}},before=normal(a,p),after=normal(p,b);if(!i)return {x:p.x+after.x*off,y:p.y+after.y*off};if(i===pts.length-1)return {x:p.x+before.x*off,y:p.y+before.y*off};const dot=before.x*after.x+before.y*after.y,k=1+dot;if(k<.01)return {x:p.x+after.x*off,y:p.y+after.y*off};return {x:p.x+(before.x+after.x)*off/k,y:p.y+(before.y+after.y)*off/k}})}
+function beltRoutePoints(graph,e){const a=graph.nodes.find(n=>n.id===e.from),b=graph.nodes.find(n=>n.id===e.to),at=(d)=>e[d+'At']??e.at??0;const p=a.kind==='belt'?{...a.points[at('from')]}:{x:a.x+70,y:a.y+(e.branch?30:-30)},q=b.kind==='belt'?{...b.points[at('to')]}:{x:b.x-70,y:b.y};const midX=(p.x+q.x)/2;return [p,{x:midX,y:p.y},{x:midX,y:q.y},q]}

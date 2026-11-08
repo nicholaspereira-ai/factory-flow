@@ -8,7 +8,7 @@ function resetItemSimulation(){itemSignature='';itemLast=null;}
 function itemEdges(e){return [port(get(e.from),e.item,true,lane(e,'from'),at(e,'from'),e.branch||0,e.fromSlot),port(get(e.to),e.item,false,lane(e,'to'),at(e,'to'),0,e.toSlot)];}
 function paintItems(){if(typeof updateLiveShortfall==='function')updateLiveShortfall();let layer=$('liveItems');if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.id='liveItems';layer.style.pointerEvents='none';$('network').appendChild(layer);}let html='';const item=(p,material)=>`<rect x="${p.x-4}" y="${p.y-3.5}" width="8" height="7" rx="1" fill="${color(material)}" stroke="#15271d"/>`;
  for(const [id,pair]of Object.entries(itemSimulation.lanes))for(let l=0;l<2;l++)for(const p of pair[l].items){const q=itemPoint(pair[l].points,p.x),off=l?11:-11;html+=item({x:q.x-q.dy*off,y:q.y+q.dx*off},p.item);}
- for(const [i,bridge]of Object.entries(itemSimulation.bridges)){const e=state.edges[i],points=offsetPoints(routePoints(e),lane(e,'from')?11:-11),length=points.slice(1).reduce((sum,p,j)=>sum+Math.hypot(p.x-points[j].x,p.y-points[j].y),0);for(const p of bridge.items)html+=item(itemPoint(points,p.progress*length),e.item);}
+ for(const [i,bridge]of Object.entries(itemSimulation.bridges)){const e=state.edges[i];for(const p of bridge.items)html+=item(itemPoint(bridge.points,p.x),e.item);}
  const typeColors={regular:'#e4c554',long:'#da7565',fast:'#76b9f0',bulk:'#a6cf71'};
  // One stationary badge per connection; no sweeping arms or flashing loads.
  for(const [i,team]of Object.entries(itemSimulation.arms)){
