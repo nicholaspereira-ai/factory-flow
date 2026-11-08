@@ -8,3 +8,10 @@ for(const [tier,speed]of [['yellow',75],['red',150],['blue',225]])for(const dist
 run(`var graph={nodes:[{id:'a',kind:'belt',tier:'yellow',lanes:['iron-plate',''],full:true,points:[{x:0,y:0},{x:100,y:0}]},{id:'s',kind:'splitter',x:200,y:0,tier:'yellow',policy:'balanced',lanes:['iron-plate','iron-plate']},{id:'b',kind:'belt',tier:'yellow',lanes:['iron-plate','iron-plate'],full:false,exportEnd:true,points:[{x:400,y:0},{x:600,y:0}]}],edges:[{from:'a',to:'s',item:'iron-plate',kind:'route',fromLane:0,toLane:0,fromAt:1},{from:'s',to:'b',item:'iron-plate',kind:'route',fromLane:0,toLane:0,branch:0},{from:'s',to:'b',item:'iron-plate',kind:'route',fromLane:1,toLane:1,branch:0}]};var sim=createItemSimulation(graph,RECIPES,E,fluids);for(let j=0;j<60*60;j++)sim.step(1/60)`);
 assert(run('sim.rates()[1]')>0);assert.equal(run('sim.rates()[2]'),0);assert(run('sim.audit()'));
 console.log('PASS tier speed independent of connection length, blocked queue spacing, conservation, and no splitter lane mixing.');
+
+// A route must wait for the item to reach the belt end, not grab it one spacing early.
+run(`var graph=setup('yellow',300),sim=createItemSimulation(graph,RECIPES,E,fluids);sim.lanes.a[0].items.splice(0);sim.lanes.a[0].items.push({id:999,x:95,item:'iron-plate'});sim.step(.02)`);
+assert.equal(run('sim.bridges[0].items.length'),0);
+const view=fs.readFileSync('src/item-view.js','utf8');
+assert(view.includes('paintItems(updateHud)'));
+assert(!view.includes('now-itemPaint>50'));

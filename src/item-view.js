@@ -1,12 +1,12 @@
 /* Live item layer. Planned rates stay separate from measured transport. */
 window.factoryItemMode=true;
-let itemSimulation=null,itemSignature='',itemLast=null,itemPaint=0;
+let itemSimulation=null,itemSignature='',itemLast=null,itemPaint=0,itemHudPaint=0;
 const inserterBadgeStates=new Map();
 let inserterAssessments={};
 const itemPoint=(points,d)=>{for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],len=Math.hypot(b.x-a.x,b.y-a.y);if(d<=len)return {x:a.x+(b.x-a.x)*d/(len||1),y:a.y+(b.y-a.y)*d/(len||1),dx:(b.x-a.x)/(len||1),dy:(b.y-a.y)/(len||1)};d-=len;}const a=points.at(-2),b=points.at(-1),len=Math.hypot(b.x-a.x,b.y-a.y)||1;return {...b,dx:(b.x-a.x)/len,dy:(b.y-a.y)/len};};
 function resetItemSimulation(){itemSignature='';itemLast=null;}
 function itemEdges(e){return [port(get(e.from),e.item,true,lane(e,'from'),at(e,'from'),e.branch||0,e.fromSlot),port(get(e.to),e.item,false,lane(e,'to'),at(e,'to'),0,e.toSlot)];}
-function paintItems(){if(typeof updateLiveShortfall==='function')updateLiveShortfall();let layer=$('liveItems');if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.id='liveItems';layer.style.pointerEvents='none';$('network').appendChild(layer);}let html='';const item=(p,material)=>`<rect x="${p.x-4}" y="${p.y-3.5}" width="8" height="7" rx="1" fill="${color(material)}" stroke="#15271d"/>`;
+function paintItems(updateHud=true){if(updateHud&&typeof updateLiveShortfall==='function')updateLiveShortfall();let layer=$('liveItems');if(!layer){layer=document.createElementNS('http://www.w3.org/2000/svg','g');layer.id='liveItems';layer.style.pointerEvents='none';$('network').appendChild(layer);}let html='';const item=(p,material)=>`<rect x="${p.x-4}" y="${p.y-3.5}" width="8" height="7" rx="1" fill="${color(material)}" stroke="#15271d"/>`;
  for(const [id,pair]of Object.entries(itemSimulation.lanes))for(let l=0;l<2;l++)for(const p of pair[l].items){const q=itemPoint(pair[l].points,p.x),off=l?11:-11;html+=item({x:q.x-q.dy*off,y:q.y+q.dx*off},p.item);}
  for(const [i,bridge]of Object.entries(itemSimulation.bridges)){const e=state.edges[i];for(const p of bridge.items)html+=item(itemPoint(bridge.points,p.x),e.item);}
  const typeColors={regular:'#e4c554',long:'#da7565',fast:'#76b9f0',bulk:'#a6cf71'};
@@ -23,6 +23,7 @@ function paintItems(){if(typeof updateLiveShortfall==='function')updateLiveShort
  }
 
  layer.innerHTML=html;const activate=ev=>{const badge=ev.target.closest('[data-inserter-edge]');if(!badge)return;if(ev.type==='keydown'&&!['Enter',' '].includes(ev.key))return;ev.preventDefault();ev.stopPropagation();selectedEdge=+badge.dataset.inserterEdge;selected=null;render();openDetails();};layer.onclick=activate;layer.onkeydown=activate;
+ if(!updateHud)return;
  for(const n of state.nodes.filter(n=>n.kind==='machine')){const card=document.querySelector(`[data-live-machine="${n.id}"]`);if(card){const m=itemSimulation.machines[n.id];card.textContent=RECIPES[n.recipe].outputs?`${m.status} · ${Object.entries(m.outputs).map(([item,q])=>label(item)+': '+fmt(q)).join(' · ')}`:`${m.status} · ${fmt(m.out)} waiting to leave`;}}
  document.querySelectorAll('[data-live-belt]').forEach(el=>{const lines=itemSimulation.lanes[el.dataset.liveBelt],k=+el.dataset.segment,rs=lines.map(l=>l.crossings.filter(v=>v.k===k).length*60/Math.max(1,Math.min(30,itemSimulation.time)));el.textContent=`A ${fmt(rs[0])} · B ${fmt(rs[1])} items/min moved`;});
  document.querySelectorAll('[data-live-ingredient]').forEach(el=>{el.textContent=`${fmt(itemSimulation.stores[el.dataset.liveIngredient]?.[el.dataset.material]||0)} in input buffer`;});
@@ -34,7 +35,7 @@ function paintItems(){if(typeof updateLiveShortfall==='function')updateLiveShort
  $('metrics').innerHTML=`<div class="metrics-context"><b>Your goal &amp; live run</b><span>Rates are per minute · live counts since last edit.</span></div>${outputs.map(o=>{const nodes=state.nodes.filter(n=>n.kind==='machine'&&o.item in E.outputs(n)),crafted=nodes.reduce((sum,n)=>sum+(itemSimulation.machines[n.id].madeOutputs[o.item]||0),0),modeled=nodes.reduce((sum,n)=>sum+(result.stats[n.id]?.actual||0)*E.outputs(n)[o.item]/RECIPES[n.recipe].out,0);return `<div class="metric output-metric"><small>${esc(label(o.item))}</small><b>${fmt(o.rate)}/min <em>goal</em></b><span>${fmt(modeled)}/min modeled production*</span><span>${fmt(crafted)} crafted in ${Math.floor(itemSimulation.time)}s</span></div>`}).join('')}<div class="metrics-context"><span>*Includes internal use. Belts filling or backing up can delay output.</span><span>${itemSimulation.audit()?'All live items accounted for':'Item accounting mismatch — restart the live run'}</span></div>`;
 }
 function liveItemFrame(now){if(window.factoryItemMode){const signature=JSON.stringify({nodes:state.nodes,edges:state.edges});if(signature!==itemSignature){itemSimulation=createItemSimulation(state,RECIPES,E,fluids);itemSignature=signature;itemLast=now;let demand=state.factoryPlan?.demand||{};try{demand=budgetRequirements()?.demand||demand}catch{}inserterAssessments={};for(const [i,team]of Object.entries(itemSimulation.arms))inserterAssessments[i]=assessInserterLink(state,state.edges[i],E,RECIPES,demand,team.length);}
- const dt=itemLast===null?0:Math.min(.1,(now-itemLast)/1000);itemLast=now;if(!paused){let left=dt;while(left>1e-8){const step=Math.min(1/60,left);itemSimulation.step(step);left-=step;}}if(now-itemPaint>50){paintItems();itemPaint=now;}
+ const dt=itemLast===null?0:Math.min(.1,(now-itemLast)/1000);itemLast=now;if(!paused){let left=dt;while(left>1e-8){const step=Math.min(1/60,left);itemSimulation.step(step);left-=step;}}const updateHud=now-itemHudPaint>=200;paintItems(updateHud);if(updateHud)itemHudPaint=now;itemPaint=now;
  }else itemLast=now;requestAnimationFrame(liveItemFrame);}
 $('itemMode').onclick=()=>{window.factoryItemMode=!window.factoryItemMode;$('itemMode').textContent=window.factoryItemMode?'Items: live':'Items: off';render();};
 $('restartItems').onclick=()=>{resetItemSimulation();message('Item simulation restarted with empty machines and belts.');};
