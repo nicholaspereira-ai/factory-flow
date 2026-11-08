@@ -43,3 +43,7 @@ See [product direction](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), 
 ## Feedback
 
 When reporting a problem, include the product, machine tiers/counts, available supplies, what you expected, and what happened. A small exported layout and screenshot help reproduce it.
+
+## GitHub Pages
+
+In repository Settings → Pages, select **Deploy from a branch**, **main**, and **/(root)**, then Save. The root index opens `src/overview.html`; all scripts and styles use relative paths, so no build service or backend is needed. `.nojekyll` disables Jekyll processing. Source updates on main are published automatically after Pages is enabled.
