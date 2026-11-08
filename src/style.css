@@ -62,3 +62,8 @@ main:has(#budgetPanel:not([hidden])){padding-right:0;grid-template-columns:minma
 body:not(.live-items) .machine .machine-budget-status{visibility:visible}
 
 .quick-belts{margin:16px 0;padding:12px 0;border-bottom:1px solid #dce3d6}.belt-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.belt-chips button{padding:7px 11px;font-size:12px}.belt-chips button[aria-pressed="true"]{background:#23674d;color:white;border-color:#23674d}.quick-belts p{margin:4px 0;font-size:11px}
+
+/* Summary rows must not compete with output cards for narrow grid columns. */
+#metrics{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 16px;max-height:160px;overflow:auto}
+#metrics .metrics-context{flex:0 0 100%;width:100%;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:10px;line-height:1.4;min-width:0}
+#metrics .metrics-context span{flex:initial;min-width:0}#metrics .output-metric{flex:1 1 170px;min-width:0;padding:0 12px 0 0}

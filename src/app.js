@@ -55,8 +55,9 @@ function save(){try{localStorage.setItem('factory-flow-routes-v4',JSON.stringify
 function commit(msg){pending=null;selectedEdge=null;save();render();if(msg)message(msg)}
 function select(nid){selected=nid;selectedEdge=null;pending=null;render();$('sidebar').scrollTop=0}
 function bounds(n){if(n.kind==='belt'){let xs=n.points.map(p=>p.x),ys=n.points.map(p=>p.y);return {x:Math.min(...xs)-40,y:Math.min(...ys)-115,w:Math.max(...xs)-Math.min(...xs)+300,h:Math.max(...ys)-Math.min(...ys)+190}}if(n.kind==='splitter')return {x:n.x-75,y:n.y-60,w:150,h:130};return {x:n.x-20,y:n.y-20,w:290,h:canvasAssembler(n)?290+Object.keys(E.inputs(n)).length*40:170+Object.keys(E.inputs(n)).length*40}}
+let fittedView=null;
 function transform(){$('world').style.transform=`translate(${view.x}px,${view.y}px) scale(${view.z})`;$('zoomLabel').textContent=Math.round(view.z*100)+'%'}
-function fit(){if(!state.nodes.length)return;let rs=state.nodes.map(bounds),x=Math.min(...rs.map(r=>r.x))-35,y=Math.min(...rs.map(r=>r.y))-35,w=Math.max(...rs.map(r=>r.x+r.w))-x+35,h=Math.max(...rs.map(r=>r.y+r.h))-y+35,b=$('viewport').getBoundingClientRect();view.z=Math.max(.15,Math.min(1.1,b.width/w,b.height/h));view.x=(b.width-w*view.z)/2-x*view.z;view.y=(b.height-h*view.z)/2-y*view.z;transform()}
+function fit(){if(!state.nodes.length)return;let rs=state.nodes.map(bounds),x=Math.min(...rs.map(r=>r.x))-35,y=Math.min(...rs.map(r=>r.y))-35,w=Math.max(...rs.map(r=>r.x+r.w))-x+35,h=Math.max(...rs.map(r=>r.y+r.h))-y+35,b=$('viewport').getBoundingClientRect();view.z=Math.max(.15,Math.min(1.1,b.width/w,b.height/h));view.x=(b.width-w*view.z)/2-x*view.z;view.y=(b.height-h*view.z)/2-y*view.z;transform();fittedView={...view}}
 function zoom(f){const b=$('viewport').getBoundingClientRect(),z=Math.max(.15,Math.min(2,view.z*f));view.x=b.width/2-(b.width/2-view.x)*z/view.z;view.y=b.height/2-(b.height/2-view.y)*z/view.z;view.z=z;transform()}
 const snap=v=>Math.round(v/40)*40,point=ev=>{let b=$('viewport').getBoundingClientRect();return {x:Math.max(40,Math.min(6000,snap((ev.clientX-b.left-view.x)/view.z))),y:Math.max(80,Math.min(6000,snap((ev.clientY-b.top-view.y)/view.z)))}};
 function orth(a,b){return [{...a},...(a.x!==b.x&&a.y!==b.y?[{x:b.x,y:a.y}]:[]),{...b}]}
@@ -124,3 +125,7 @@ render();requestAnimationFrame(()=>{fit();if($('viewport').getBoundingClientRect
 document.querySelectorAll(".file-menu button,.examples-menu button").forEach(button=>button.addEventListener("click",()=>{let menu=button.closest("details");while(menu){menu.open=false;menu=menu.parentElement?.closest("details")}}));
 
 function machineBeltBudget(n){const rate=E.per(n)*n.count,r=RECIPES[n.recipe],tier=state.planSettings?.beltTier||'yellow',budget=planBelts(Object.fromEntries(Object.entries(E.inputs(n)).map(([item,q])=>[item,rate*q/r.out])),fluids,tier);return `<details class="machine-belts"><summary>Input belts at full machine speed</summary><p>${label(tier)} belts · both lanes assigned to one material. This is this group’s maximum demand, not the whole factory’s target.</p>${budget.map(b=>`<div class="connection"><b>${esc(label(b.item))}</b><div class="row"><span>${fmt(b.rate)}/min</span><b>${b.belts} belt${b.belts===1?'':'s'}</b></div><small>${b.lanes} lane${b.lanes===1?'':'s'} · ${fmt(b.load*100)}% of allocated capacity</small></div>`).join('')||'<p>No solid inputs. Use pipes for fluids.</p>'}</details>`}
+
+// Refit only a view the user has left fitted; manual navigation always wins.
+function refitOnCanvasResize(){if(fittedView&&['x','y','z'].every(k=>Math.abs(view[k]-fittedView[k])<1e-8))fit()}
+if(typeof ResizeObserver!=='undefined'){const canvasSizeObserver=new ResizeObserver(()=>refitOnCanvasResize());canvasSizeObserver.observe($('viewport'))}

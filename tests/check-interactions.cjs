@@ -14,3 +14,5 @@ run("state.nodes.push({id:'n102',kind:'machine',recipe:'advanced-oil-processing'
 drag(socket({out:'n102',outputItem:'heavy-oil'}),socket({in:'n103',item:'heavy-oil'}));assert.equal(run('state.edges.length'),1);assert.equal(run('state.edges[0].item'),'heavy-oil');assert(run('validate(state)'));
 run('state.edges=[]');drag(socket({out:'n102',outputItem:'light-oil'}),socket({in:'n103',item:'heavy-oil'}));assert.equal(run('state.edges.length'),0);
 console.log('PASS secondary refinery output drag preserves its material and rejects a mismatched ingredient.');
+
+run('fit()');const initialZoom=run('view.z');dom.viewport.getBoundingClientRect=()=>({left:0,top:0,width:500,height:350});run('refitOnCanvasResize()');assert(run('view.z')<initialZoom);run('zoom(1.25)');const manualZoom=run('view.z');dom.viewport.getBoundingClientRect=()=>({left:0,top:0,width:1000,height:700});run('refitOnCanvasResize()');assert.equal(run('view.z'),manualZoom);console.log('PASS fitted view follows viewport resizing while manual zoom is preserved.');
